@@ -4,8 +4,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   launchGame: (executablePath, args) => ipcRenderer.invoke('launch-game', executablePath, args),
   launchPlatform: (platform, gameId) => ipcRenderer.invoke('launch-platform', platform, gameId),
   chooseExecutable: () => ipcRenderer.invoke('choose-executable'),
+  scanGameFolder: () => ipcRenderer.invoke('scan-game-folder'),
   importMedia: (kind) => ipcRenderer.invoke('import-media', kind),
   downloadMedia: (url, kind) => ipcRenderer.invoke('download-media', url, kind),
+  searchSteamGame: (query) => ipcRenderer.invoke('search-steam-game', query),
   openDataFolder: () => ipcRenderer.invoke('open-data-folder'),
   setWindowMaximized: (maximized) => ipcRenderer.invoke('set-window-maximized', maximized),
   setWindowFullscreen: (fullscreen) => ipcRenderer.invoke('set-window-fullscreen', fullscreen),
@@ -13,6 +15,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveBackup: (payload) => ipcRenderer.invoke('save-backup', payload),
   loadBackup: () => ipcRenderer.invoke('load-backup'),
   checkUpdate: () => ipcRenderer.invoke('check-update'),
+  getUpdateState: () => ipcRenderer.invoke('get-update-state'),
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
   onUpdateStatus: (callback) => {

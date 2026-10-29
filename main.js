@@ -6,6 +6,7 @@ const http = require('http');
 const https = require('https');
 const { spawn } = require('child_process');
 const { autoUpdater } = require('electron-updater');
+const { nativeImage } = require('electron');
 
 let mainWindow;
 let runningGame = null;
@@ -17,6 +18,40 @@ function mediaDirectory() {
   return directory;
 }
 
+function executableTitle(filePath) {
+  return path.basename(filePath, path.extname(filePath))
+    .replace(/[._-]+/g, ' ')
+    .replace(/\b(x64|x86|win64|win32|shipping|launcher|game)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function findExecutables(directory, depth = 0, results = []) {
+  if (depth > 4 || results.length >= 80) return results;
+  let entries;
+  try {
+    entries = fs.readdirSync(directory, { withFileTypes: true });
+  } catch (_error) {
+    return results;
+  }
+
+  for (const entry of entries) {
+    if (results.length >= 80) break;
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      if (!['node_modules', 'redist', 'redistributables', '__pycache__'].includes(entry.name.toLowerCase())) {
+        findExecutables(fullPath, depth + 1, results);
+      }
+    } else if (entry.isFile() && path.extname(entry.name).toLowerCase() === '.exe') {
+      const lowerName = entry.name.toLowerCase();
+      if (!['uninstall.exe', 'unins000.exe', 'crashreporter.exe'].includes(lowerName)) {
+        results.push(fullPath);
+      }
+    }
+  }
+  return results;
+}
+
 function safeMediaName(name) {
   return `${Date.now()}-${String(name || 'media').replace(/[^a-z0-9._-]/gi, '_')}`;
 }
@@ -25,12 +60,13 @@ function toFileUrl(filePath) {
   return pathToFileURL(filePath).toString();
 }
 
-function requestJson(url) {
+function requestJson(url, headers = {}) {
   return new Promise((resolve, reject) => {
     https.get(url, {
       headers: {
-        'User-Agent': 'BlackLaunch/0.1.8',
-        Accept: 'application/vnd.github+json'
+        'User-Agent': 'BlackLaunch/0.2.11',
+        Accept: 'application/json',
+        ...headers
       }
     }, (response) => {
       let body = '';
@@ -38,13 +74,13 @@ function requestJson(url) {
       response.on('data', (chunk) => { body += chunk; });
       response.on('end', () => {
         if (response.statusCode !== 200) {
-          reject(new Error(`GitHub a répondu HTTP ${response.statusCode}.`));
+          reject(new Error(`Le service a répondu HTTP ${response.statusCode}.`));
           return;
         }
         try {
           resolve(JSON.parse(body));
         } catch (_error) {
-          reject(new Error('Réponse GitHub invalide.'));
+          reject(new Error('Réponse JSON invalide.'));
         }
       });
     }).on('error', reject);
@@ -207,6 +243,30 @@ ipcMain.handle('choose-executable', async () => {
   return result.canceled ? null : result.filePaths[0];
 });
 
+ipcMain.handle('scan-game-folder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Choisir le dossier du jeu à analyser',
+    properties: ['openDirectory']
+  });
+  if (result.canceled) return [];
+
+  const executables = findExecutables(result.filePaths[0]);
+  return executables.map((filePath) => {
+    let icon = null;
+    try {
+      const image = nativeImage.createFromPath(filePath);
+      if (!image.isEmpty()) {
+        const destination = path.join(mediaDirectory(), safeMediaName(`${path.basename(filePath, '.exe')}.png`));
+        fs.writeFileSync(destination, image.resize({ width: 256, height: 256 }).toPNG());
+        icon = toFileUrl(destination);
+      }
+    } catch (_error) {
+      icon = null;
+    }
+    return { path: filePath, title: executableTitle(filePath), icon };
+  });
+});
+
 ipcMain.handle('import-media', async (_event, kind) => {
   const filters = kind === 'icon'
     ? [{ name: 'Images et icônes', extensions: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'ico', 'bmp'] }]
@@ -234,6 +294,46 @@ ipcMain.handle('download-media', async (_event, url, kind) => {
   const destination = path.join(mediaDirectory(), safeMediaName(`download${extension}`));
   await downloadFile(url, destination);
   return toFileUrl(destination);
+});
+
+ipcMain.handle('search-steam-game', async (_event, query) => {
+  if (typeof query !== 'string' || !query.trim()) {
+    throw new Error('Saisissez un titre ou un ID Steam.');
+  }
+
+  const searchTerm = query.trim();
+  let app;
+  const appIdMatch = searchTerm.match(/(?:\/app\/|^)(\d+)(?:\/|$)/i);
+  const appId = appIdMatch ? appIdMatch[1] : null;
+
+  if (appId) {
+    const details = await requestJson(`https://store.steampowered.com/api/appdetails?appids=${encodeURIComponent(appId)}&l=french&cc=fr`);
+    const result = details[appId];
+    if (!result?.success || !result.data) {
+      throw new Error('Aucun jeu Steam trouvé pour cet ID.');
+    }
+    app = result.data;
+  } else {
+    const search = await requestJson(`https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(searchTerm)}&l=french&cc=fr`);
+    const firstResult = Array.isArray(search.items) ? search.items[0] : null;
+    if (!firstResult?.id) {
+      throw new Error('Aucun jeu Steam trouvé pour ce titre.');
+    }
+    const details = await requestJson(`https://store.steampowered.com/api/appdetails?appids=${firstResult.id}&l=french&cc=fr`);
+    const result = details[String(firstResult.id)];
+    if (!result?.success || !result.data) {
+      throw new Error('Les informations détaillées de ce jeu sont indisponibles.');
+    }
+    app = result.data;
+  }
+
+  const id = String(app.steam_appid);
+  return {
+    id,
+    title: app.name,
+    icon: app.header_image || `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/header.jpg`,
+    bg: app.background_raw || app.background || `https://cdn.cloudflare.steamstatic.com/steam/apps/${id}/library_hero.jpg`
+  };
 });
 
 ipcMain.handle('open-data-folder', async () => {
@@ -273,6 +373,8 @@ ipcMain.handle('check-update', async () => {
   const result = await autoUpdater.checkForUpdates();
   return { version: result?.updateInfo?.version || null };
 });
+
+ipcMain.handle('get-update-state', () => updateState);
 
 ipcMain.handle('download-update', async () => {
   await autoUpdater.downloadUpdate();
