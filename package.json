@@ -1,6 +1,6 @@
 {
   "name": "blacklaunch",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "BlackLaunch - Launcher de jeux Windows",
   "author": "BlackLaunch",
   "main": "main.js",
@@ -12,6 +12,9 @@
   "devDependencies": {
     "electron": "^38.2.0",
     "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
   },
   "build": {
     "appId": "fr.launcher.jeux",

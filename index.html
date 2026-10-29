@@ -87,6 +87,11 @@
     </style>
 </head>
 <body class="bg-black text-white overflow-hidden h-screen w-screen selection:bg-white selection:text-black">
+    <div id="update-banner" class="hidden fixed top-0 left-1/2 -translate-x-1/2 z-[100] bg-blue-600 text-white px-5 py-3 rounded-b-xl shadow-2xl flex items-center gap-4">
+        <span id="update-banner-text">Mise à jour disponible.</span>
+        <button id="update-download-btn" class="bg-white text-blue-700 font-bold px-3 py-1 rounded-lg">Mettre à jour</button>
+        <button id="update-dismiss-btn" class="text-white/80 hover:text-white" title="Fermer"><i class="fa-solid fa-xmark"></i></button>
+    </div>
 
     <!-- Couches d'arrière-plan (Peut contenir des images ou des vidéos) -->
     <div id="bg-1" class="bg-layer absolute inset-0 opacity-100 z-0 flex items-center justify-center overflow-hidden"></div>
@@ -271,7 +276,7 @@
                         <i class="fa-solid fa-rotate-left mr-2"></i>Réinitialiser les options
                     </button>
                             <div id="update-status" class="text-xs text-gray-500">Dépôt mises à jour : YaZhrod24/blacklauncher</div>
-                            <div class="text-sm text-gray-400">Version actuelle : <strong class="text-white">v0.1.8</strong></div>
+                            <div class="text-sm text-gray-400">Version actuelle : <strong class="text-white">v0.1.9</strong></div>
                 </div>
             </div>
         </div>
@@ -898,12 +903,55 @@
             const status = document.getElementById('update-status');
             status.textContent = "Vérification GitHub...";
             try {
-                const release = await window.electronAPI.checkUpdate();
-                status.innerHTML = `Dernière release : <a class="underline" href="${release.url}" target="_blank">${release.version}</a>`;
+                await window.electronAPI.checkUpdate();
             } catch (error) {
                 status.textContent = `Aucune release GitHub détectée : ${error.message}`;
             }
         });
+
+        function setupUpdateUi() {
+            if (!window.electronAPI || !window.electronAPI.onUpdateStatus) return;
+            const banner = document.getElementById('update-banner');
+            const bannerText = document.getElementById('update-banner-text');
+            const downloadButton = document.getElementById('update-download-btn');
+            const status = document.getElementById('update-status');
+
+            window.electronAPI.onUpdateStatus((update) => {
+                if (update.status === 'available') {
+                    bannerText.textContent = `Mise à jour v${update.version} disponible.`;
+                    banner.classList.remove('hidden');
+                    downloadButton.disabled = false;
+                    downloadButton.textContent = 'Mettre à jour';
+                    status.textContent = `Mise à jour disponible : v${update.version}`;
+                } else if (update.status === 'downloading') {
+                    banner.classList.remove('hidden');
+                    bannerText.textContent = `Téléchargement de la mise à jour : ${update.percent}%`;
+                    downloadButton.disabled = true;
+                    downloadButton.textContent = `${update.percent}%`;
+                    status.textContent = bannerText.textContent;
+                } else if (update.status === 'downloaded') {
+                    banner.classList.remove('hidden');
+                    bannerText.textContent = `Mise à jour v${update.version} prête.`;
+                    downloadButton.disabled = false;
+                    downloadButton.textContent = 'Redémarrer et installer';
+                    status.textContent = 'Mise à jour téléchargée.';
+                    downloadButton.onclick = () => window.electronAPI.installUpdate();
+                } else if (update.status === 'current') {
+                    status.textContent = 'BlackLaunch est à jour.';
+                } else if (update.status === 'error') {
+                    status.textContent = `Mise à jour indisponible : ${update.message}`;
+                }
+            });
+
+            downloadButton.onclick = async () => {
+                try {
+                    await window.electronAPI.downloadUpdate();
+                } catch (error) {
+                    status.textContent = `Téléchargement impossible : ${error.message}`;
+                }
+            };
+            document.getElementById('update-dismiss-btn').onclick = () => banner.classList.add('hidden');
+        }
 
         function quitLauncher() {
             if (window.electronAPI && window.electronAPI.quitApp) window.electronAPI.quitApp();
@@ -930,7 +978,10 @@
         }
 
         // Démarrage
-        window.onload = init;
+        window.onload = () => {
+            init();
+            setupUpdateUi();
+        };
     </script>
 </body>
 </html>

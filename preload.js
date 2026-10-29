@@ -13,6 +13,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveBackup: (payload) => ipcRenderer.invoke('save-backup', payload),
   loadBackup: () => ipcRenderer.invoke('load-backup'),
   checkUpdate: () => ipcRenderer.invoke('check-update'),
+  downloadUpdate: () => ipcRenderer.invoke('download-update'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  onUpdateStatus: (callback) => {
+    ipcRenderer.on('update-status', (_event, status) => callback(status));
+  },
   onGameEnded: (callback) => {
     ipcRenderer.on('game-ended', (_event, result) => callback(result));
   }

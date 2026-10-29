@@ -5,9 +5,11 @@ const { pathToFileURL } = require('url');
 const http = require('http');
 const https = require('https');
 const { spawn } = require('child_process');
+const { autoUpdater } = require('electron-updater');
 
 let mainWindow;
 let runningGame = null;
+let updateState = { status: 'idle' };
 
 function mediaDirectory() {
   const directory = path.join(app.getPath('userData'), 'media');
@@ -105,6 +107,20 @@ function createWindow() {
   });
 
   mainWindow.loadFile('index.html');
+  mainWindow.webContents.once('did-finish-load', () => {
+    autoUpdater.autoDownload = false;
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.checkForUpdates().catch((error) => {
+      sendUpdateStatus({ status: 'error', message: error.message });
+    });
+  });
+}
+
+function sendUpdateStatus(status) {
+  updateState = status;
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('update-status', status);
+  }
 }
 
 function stopRunningGame() {
@@ -254,8 +270,33 @@ ipcMain.handle('load-backup', async () => {
 });
 
 ipcMain.handle('check-update', async () => {
-  const release = await requestJson('https://api.github.com/repos/YaZhrod24/blacklauncher/releases/latest');
-  return { version: release.tag_name, url: release.html_url };
+  const result = await autoUpdater.checkForUpdates();
+  return { version: result?.updateInfo?.version || null };
+});
+
+ipcMain.handle('download-update', async () => {
+  await autoUpdater.downloadUpdate();
+  return true;
+});
+
+ipcMain.handle('install-update', () => {
+  autoUpdater.quitAndInstall(false, true);
+});
+
+autoUpdater.on('update-available', (info) => {
+  sendUpdateStatus({ status: 'available', version: info.version });
+});
+autoUpdater.on('download-progress', (progress) => {
+  sendUpdateStatus({ status: 'downloading', percent: Math.round(progress.percent) });
+});
+autoUpdater.on('update-downloaded', (info) => {
+  sendUpdateStatus({ status: 'downloaded', version: info.version });
+});
+autoUpdater.on('update-not-available', () => {
+  sendUpdateStatus({ status: 'current' });
+});
+autoUpdater.on('error', (error) => {
+  sendUpdateStatus({ status: 'error', message: error.message });
 });
 
 ipcMain.handle('quit-app', () => {
