@@ -23,28 +23,37 @@ function toFileUrl(filePath) {
   return pathToFileURL(filePath).toString();
 }
 
+function requestJson(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, {
+      headers: {
+        'User-Agent': 'BlackLaunch/0.1.8',
+        Accept: 'application/vnd.github+json'
+      }
+    }, (response) => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', (chunk) => { body += chunk; });
+      response.on('end', () => {
+        if (response.statusCode !== 200) {
+          reject(new Error(`GitHub a répondu HTTP ${response.statusCode}.`));
+          return;
+        }
+        try {
+          resolve(JSON.parse(body));
+        } catch (_error) {
+          reject(new Error('Réponse GitHub invalide.'));
+        }
+      });
+    }).on('error', reject);
+  });
+}
+
 function downloadFile(url, destination, redirects = 0) {
   return new Promise((resolve, reject) => {
     if (redirects > 5) {
       reject(new Error('Trop de redirections.'));
       return;
-    }
-
-    function requestJson(url) {
-      return new Promise((resolve, reject) => {
-        https.get(url, {                 headers: { 'User-Agent': 'BlackLaunch/0.1.7', Accept: 'application/vnd.github+json' } }, (response) => {
-          let body = '';
-          response.setEncoding('utf8');
-          response.on('data', (chunk) => { body += chunk; });
-          response.on('end', () => {
-            if (response.statusCode !== 200) {
-              reject(new Error(`GitHub a répondu HTTP ${response.statusCode}.`));
-              return;
-            }
-            try { resolve(JSON.parse(body)); } catch (_) { reject(new Error('Réponse GitHub invalide.')); }
-          });
-        }).on('error', reject);
-      });
     }
 
     const client = url.startsWith('https:') ? https : http;
