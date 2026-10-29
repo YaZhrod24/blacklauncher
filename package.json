@@ -1,0 +1,47 @@
+{
+  "name": "blacklaunch",
+  "version": "0.1.7",
+  "description": "BlackLaunch - Launcher de jeux Windows",
+  "author": "BlackLaunch",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^38.2.0",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "fr.launcher.jeux",
+    "productName": "BlackLaunch",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "index.html",
+      "main.js",
+      "preload.js",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "YaZhrod24",
+      "repo": "blacklauncher",
+      "private": false,
+      "releaseType": "release"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

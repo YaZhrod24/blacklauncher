@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BlackLaunch</title>
+    
+    <!-- Google Fonts : Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- FontAwesome pour les icônes -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Masquer la barre de défilement */
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* Animations du Carrousel */
+        .game-icon {
+            transition: all 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+            filter: grayscale(40%) brightness(0.7);
+            cursor: pointer;
+        }
+        
+        .game-icon:hover { filter: grayscale(0%) brightness(1); }
+
+        .game-icon.active {
+            transform: scale(1.15) translateY(-12px);
+            border: 2px solid white;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+            filter: grayscale(0%) brightness(1.1);
+            z-index: 10;
+        }
+
+        /* Fondu d'arrière-plan (Images et Vidéos) */
+        .bg-layer {
+            transition: opacity 0.8s ease-in-out;
+            background-size: cover;
+            background-position: center;
+        }
+
+        @keyframes slideUpFade {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .animate-info {
+            animation: slideUpFade 0.5s ease-out forwards;
+        }
+        
+        .play-btn { transition: all 0.2s ease; }
+        .play-btn:hover { transform: scale(1.05); background-color: #e5e5e5; }
+        .play-btn:active { transform: scale(0.95); }
+
+        /* Effet Glassmorphism pour les modales et tuiles */
+        .glass-panel {
+            background: rgba(20, 20, 20, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
+            animation-duration: 0s !important;
+            animation-iteration-count: 1 !important;
+            scroll-behavior: auto !important;
+            transition-duration: 0s !important;
+        }
+
+        select, select option {
+            color: #ffffff;
+            background-color: #211b29;
+        }
+    </style>
+</head>
+<body class="bg-black text-white overflow-hidden h-screen w-screen selection:bg-white selection:text-black">
+
+    <!-- Couches d'arrière-plan (Peut contenir des images ou des vidéos) -->
+    <div id="bg-1" class="bg-layer absolute inset-0 opacity-100 z-0 flex items-center justify-center overflow-hidden"></div>
+    <div id="bg-2" class="bg-layer absolute inset-0 opacity-0 z-0 flex items-center justify-center overflow-hidden"></div>
+    
+    <!-- Dégradé sombre pour la lisibilité -->
+    <div class="absolute inset-0 bg-gradient-to-t from-black via-black/60 to-transparent z-0 pointer-events-none"></div>
+    <div class="absolute inset-0 bg-gradient-to-r from-black/80 via-black/20 to-transparent z-0 pointer-events-none"></div>
+
+    <!-- Barre de Navigation Supérieure -->
+    <nav class="absolute top-0 right-0 w-full p-8 flex justify-end space-x-8 z-30 items-center drop-shadow-lg pointer-events-auto">
+        <div class="flex items-center space-x-2 text-sm text-gray-300 mr-auto ml-8">
+            <i class="fa-regular fa-clock text-xl"></i>
+            <span id="current-time">12:00</span>
+        </div>
+        
+        <button onclick="prepareGameForm(null)" class="nav-btn group flex flex-col items-center opacity-70 hover:opacity-100 transition" title="Ajouter un jeu">
+            <i class="fa-solid fa-circle-plus text-3xl mb-1 group-hover:scale-110 transition-transform"></i>
+        </button>
+        
+        <button onclick="openModal('settings-modal')" class="nav-btn group flex flex-col items-center opacity-70 hover:opacity-100 transition" title="Gérer les jeux">
+            <i class="fa-solid fa-gear text-3xl mb-1 group-hover:rotate-90 transition-transform duration-500"></i>
+        </button>
+        <button onclick="quitLauncher()" class="nav-btn group flex flex-col items-center opacity-70 hover:opacity-100 transition" title="Quitter BlackLaunch">
+            <i class="fa-solid fa-power-off text-3xl mb-1 group-hover:scale-110 transition-transform"></i>
+        </button>
+        
+        <button class="nav-btn group flex flex-col items-center opacity-70 hover:opacity-100 transition" title="Profil">
+            <div class="w-10 h-10 rounded-full overflow-hidden border-2 border-transparent group-hover:border-white transition-colors">
+                <img src="https://placehold.co/100x100/333/fff?text=P1" alt="Profil" class="w-full h-full object-cover">
+            </div>
+        </button>
+    </nav>
+
+    <!-- VUE PRINCIPALE : Carrousel -->
+    <main id="carousel-view" class="absolute top-[20%] left-0 w-full h-[80%] flex flex-col justify-end pb-24 px-16 z-10 transition-opacity duration-500">
+        
+        <!-- Informations du Jeu Sélectionné -->
+        <div id="game-info" class="mb-8 w-2/3 max-w-3xl">
+            <h1 id="game-title" class="text-5xl md:text-6xl font-bold mb-4 tracking-tight drop-shadow-md">Titre</h1>
+            
+            <div class="flex items-center space-x-6 mb-8">
+                <button id="play-btn" class="play-btn bg-white text-black px-12 py-3 rounded-full font-bold text-lg flex items-center shadow-lg shadow-white/20">
+                    <i id="play-icon" class="fa-solid fa-play mr-3 text-xl"></i> <span id="play-text">Jouer</span>
+                </button>
+                <div id="playtime-container" class="flex flex-col text-sm text-gray-300 drop-shadow-md">
+                    <span class="uppercase tracking-widest text-xs font-semibold text-gray-400">Temps de jeu</span>
+                    <span id="game-time" class="text-xl font-bold text-white">0 heures</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Carrousel de Jeux -->
+        <div id="carousel-container" class="relative w-full">
+            <div id="games-carousel" class="flex space-x-4 overflow-x-auto no-scrollbar py-12 px-4 snap-x snap-mandatory scroll-smooth" style="scroll-padding-left: 2rem;">
+                <!-- Injecté par JS -->
+            </div>
+        </div>
+    </main>
+
+    <!-- VUE BIBLIOTHÈQUE : Grille de tous les jeux -->
+    <section id="library-view" class="absolute inset-0 bg-black/90 z-20 hidden flex-col pt-32 px-16 pb-16 overflow-y-auto no-scrollbar transition-opacity duration-500 opacity-0">
+        <div class="flex justify-between items-center mb-10">
+            <h2 class="text-4xl font-bold"><i class="fa-solid fa-layer-group mr-4"></i>Bibliothèque des jeux</h2>
+            <button onclick="toggleLibrary()" class="bg-white/10 hover:bg-white/20 text-white px-6 py-2 rounded-full font-semibold transition backdrop-blur-md">
+                <i class="fa-solid fa-arrow-left mr-2"></i> Retour
+            </button>
+        </div>
+        <div class="flex flex-wrap gap-3 mb-8">
+            <input id="library-search" type="search" placeholder="Rechercher un jeu..." class="flex-1 min-w-64 bg-white/10 border border-white/20 rounded-lg p-3 text-white">
+            <select id="library-sort" class="bg-white/10 border border-white/20 rounded-lg p-3 text-white">
+                <option value="name">Nom</option>
+                <option value="playtime">Temps de jeu</option>
+                <option value="recent">Ajout récent</option>
+            </select>
+        </div>
+        <div id="library-grid" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 pb-12">
+            <!-- Injecté par JS -->
+        </div>
+    </section>
+
+    <!-- Modal : Ajouter un jeu -->
+    <div id="add-game-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-[70] hidden flex items-center justify-center opacity-0 transition-opacity duration-300">
+        <div class="glass-panel p-8 rounded-2xl w-full max-w-lg shadow-2xl transform scale-95 transition-transform duration-300 modal-content">
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="game-form-title" class="text-2xl font-bold">Ajouter un jeu</h2>
+                <button onclick="closeModal('add-game-modal')" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-2xl"></i></button>
+            </div>
+            
+            <form id="add-game-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Titre du jeu</label>
+                    <input type="text" id="new-title" required class="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:outline-none focus:border-white transition">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Icône du jeu</label>
+                    <div class="flex gap-2">
+                        <input type="url" id="new-icon" required placeholder="URL https://..." class="min-w-0 flex-1 bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:outline-none focus:border-white transition">
+                        <button type="button" id="import-icon-btn" class="shrink-0 bg-white/10 hover:bg-white/20 rounded-lg px-3" title="Importer une image ou un .ico"><i class="fa-solid fa-upload"></i></button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">L'URL sera téléchargée localement. Les images et fichiers .ico sont acceptés.</p>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Fond du jeu</label>
+                    <div class="flex gap-2">
+                        <input type="url" id="new-bg" required placeholder="URL image ou vidéo..." class="min-w-0 flex-1 bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:outline-none focus:border-white transition">
+                        <button type="button" id="import-bg-btn" class="shrink-0 bg-white/10 hover:bg-white/20 rounded-lg px-3" title="Importer une image ou une vidéo"><i class="fa-solid fa-upload"></i></button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Images et vidéos acceptées. Le média sera copié dans les données locales.</p>
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Chemin de l'exécutable (.exe)</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="new-exe" required placeholder="C:\Games\MonJeu\game.exe" class="min-w-0 flex-1 bg-black/50 border border-white/20 rounded-lg p-3 text-white focus:outline-none focus:border-white transition">
+                        <button type="button" id="choose-exe-btn" class="shrink-0 bg-white/10 hover:bg-white/20 rounded-lg px-4 transition" title="Parcourir">
+                            <i class="fa-solid fa-folder-open"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-1">Plateforme</label>
+                        <select id="new-platform" class="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white">
+                            <option value="local">Exécutable local</option>
+                            <option value="steam">Steam</option>
+                            <option value="epic">Epic Games</option>
+                            <option value="ubisoft">Ubisoft Connect</option>
+                        </select>
+                    </div>
+                </div>
+                <input type="text" id="new-platform-id" placeholder="ID Steam/App Epic/ID Ubisoft (si plateforme)" class="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-1">Arguments de lancement (optionnel)</label>
+                    <input type="text" id="new-args" placeholder="-novid -fullscreen" class="w-full bg-black/50 border border-white/20 rounded-lg p-3 text-white">
+                </div>
+                <button type="submit" class="w-full bg-white text-black font-bold py-3 rounded-lg hover:bg-gray-200 transition mt-4 shadow-lg">
+                    <span id="game-form-submit-text">Ajouter à la bibliothèque</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal : Gérer les jeux -->
+    <div id="settings-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 hidden flex items-center justify-center opacity-0 transition-opacity duration-300">
+        <div class="glass-panel p-8 rounded-2xl w-full max-w-3xl shadow-2xl transform scale-95 transition-transform duration-300 modal-content h-[80vh] flex flex-col">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold"><i class="fa-solid fa-gear mr-3"></i>Gérer la bibliothèque</h2>
+                <button onclick="closeModal('settings-modal')" class="text-gray-400 hover:text-white"><i class="fa-solid fa-xmark text-2xl"></i></button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto no-scrollbar pr-2 space-y-6">
+                <div id="manage-games-list" class="space-y-3">
+                    <!-- Généré par JS -->
+                </div>
+                <div class="border-t border-white/10 pt-5 space-y-4">
+                    <h3 class="font-bold text-lg"><i class="fa-solid fa-sliders mr-2"></i>Options du launcher</h3>
+                    <label class="flex items-center justify-between gap-4 text-sm">
+                        <span><strong>Confirmer avant suppression</strong><br><span class="text-gray-400">Demander une confirmation avant de retirer un jeu.</span></span>
+                        <input type="checkbox" id="setting-confirm-delete" class="w-5 h-5 accent-white">
+                    </label>
+                    <label class="flex items-center justify-between gap-4 text-sm">
+                        <span><strong>Démarrer en plein écran</strong><br><span class="text-gray-400">Masquer la barre Windows et occuper tout l'écran.</span></span>
+                        <input type="checkbox" id="setting-fullscreen" class="w-5 h-5 accent-white">
+                    </label>
+                    <label class="flex items-center justify-between gap-4 text-sm">
+                        <span><strong>Animations de l'interface</strong><br><span class="text-gray-400">Activer les transitions et animations du carrousel.</span></span>
+                        <input type="checkbox" id="setting-animations" class="w-5 h-5 accent-white">
+                    </label>
+                    <label class="flex items-center justify-between gap-4 text-sm">
+                        <span><strong>Ouvrir sur le dernier jeu</strong><br><span class="text-gray-400">Mémoriser le jeu sélectionné au prochain démarrage.</span></span>
+                        <input type="checkbox" id="setting-remember-selection" class="w-5 h-5 accent-white">
+                    </label>
+                    <button id="open-data-folder-btn" type="button" class="bg-white/10 hover:bg-white/20 rounded-lg px-4 py-2 text-sm">
+                        <i class="fa-solid fa-folder-open mr-2"></i>Ouvrir le dossier des données locales
+                    </button>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="backup-btn" type="button" class="bg-white/10 hover:bg-white/20 rounded-lg px-4 py-2 text-sm"><i class="fa-solid fa-download mr-2"></i>Exporter sauvegarde</button>
+                        <button id="restore-btn" type="button" class="bg-white/10 hover:bg-white/20 rounded-lg px-4 py-2 text-sm"><i class="fa-solid fa-upload mr-2"></i>Importer sauvegarde</button>
+                        <button id="check-update-btn" type="button" class="bg-white/10 hover:bg-white/20 rounded-lg px-4 py-2 text-sm"><i class="fa-solid fa-cloud-arrow-down mr-2"></i>Vérifier les mises à jour</button>
+                    </div>
+                    <button id="reset-settings-btn" type="button" class="bg-red-500/10 hover:bg-red-500/20 text-red-200 rounded-lg px-4 py-2 text-sm">
+                        <i class="fa-solid fa-rotate-left mr-2"></i>Réinitialiser les options
+                    </button>
+                            <div id="update-status" class="text-xs text-gray-500">Dépôt mises à jour : YaZhrod24/blacklauncher</div>
+                            <div class="text-sm text-gray-400">Version actuelle : <strong class="text-white">v0.1.7</strong></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-white text-black px-6 py-3 rounded-full shadow-lg font-semibold flex items-center space-x-3 transition-all duration-300 opacity-0 translate-y-4 z-[60] pointer-events-none">
+        <i class="fa-solid fa-circle-check text-green-500 text-xl"></i>
+        <span id="toast-msg">Action effectuée !</span>
+    </div>
+
+    <script>
+        // --- DONNEES & LOCALSTORAGE ---
+        const defaultGames = [
+            {
+                id: 'g1',
+                title: 'Cyberpunk 2077',
+                icon: 'https://images.unsplash.com/photo-1605901309584-818e25960b8f?q=80&w=400&auto=format&fit=crop',
+                bg: 'https://images.unsplash.com/photo-1605901309584-818e25960b8f?q=80&w=1920&auto=format&fit=crop',
+                exe: 'C:\\Games\\Cyberpunk 2077\\bin\\x64\\Cyberpunk2077.exe',
+                playtime: 145.5
+            },
+            {
+                id: 'g2',
+                title: 'Vidéo Background Demo',
+                icon: 'https://images.unsplash.com/photo-1542282088-fe8426682b8f?q=80&w=400&auto=format&fit=crop',
+                bg: 'https://www.w3schools.com/html/mov_bbb.mp4', // Exemple de fond animé
+                exe: 'C:\\Games\\Demo\\demo.exe',
+                playtime: 12.0
+            },
+            {
+                id: 'g3',
+                title: 'Horizon Forbidden West',
+                icon: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=400&auto=format&fit=crop',
+                bg: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?q=80&w=1920&auto=format&fit=crop',
+                exe: 'C:\\Games\\Horizon\\horizon.exe',
+                playtime: 210.2
+            }
+        ];
+
+        let games = [];
+        let activeIndex = 0;
+        let activeBgLayer = 1;
+        let isLibraryOpen = false;
+        let runningSession = null;
+        let playtimeTimer = null;
+        let editingGameId = null;
+        const launcherSettings = {
+            confirmDelete: true,
+            fullscreen: false,
+            animations: true,
+            rememberSelection: true
+        };
+
+        const carouselEl = document.getElementById('games-carousel');
+        const titleEl = document.getElementById('game-title');
+        const timeEl = document.getElementById('game-time');
+        const infoContainer = document.getElementById('game-info');
+        const playtimeContainer = document.getElementById('playtime-container');
+        const bg1 = document.getElementById('bg-1');
+        const bg2 = document.getElementById('bg-2');
+        const playBtn = document.getElementById('play-btn');
+        const playText = document.getElementById('play-text');
+        const playIcon = document.getElementById('play-icon');
+
+        // --- INITIALISATION ---
+        function init() {
+            loadGames();
+            renderCarousel();
+            updateGameInfo(activeIndex, false);
+            updateClock();
+            setInterval(updateClock, 30000);
+            setupKeyboardNavigation();
+            setupElectronEvents();
+            document.body.classList.toggle('reduce-motion', !launcherSettings.animations);
+            if (launcherSettings.fullscreen && window.electronAPI && window.electronAPI.setWindowFullscreen) {
+                window.electronAPI.setWindowFullscreen(true);
+            }
+        }
+
+        function loadGames() {
+            const saved = localStorage.getItem('ps5_launcher_games');
+            if (saved) {
+                games = JSON.parse(saved);
+            } else {
+                games = [...defaultGames];
+                saveGames();
+            }
+            const savedSettings = localStorage.getItem('ps5_launcher_settings');
+            if (savedSettings) Object.assign(launcherSettings, JSON.parse(savedSettings));
+            const savedSelection = Number(localStorage.getItem('blacklaunch_active_game'));
+            if (launcherSettings.rememberSelection && Number.isInteger(savedSelection) && savedSelection >= 0 && savedSelection <= games.length) {
+                activeIndex = savedSelection;
+            }
+        }
+
+        function saveGames() {
+            localStorage.setItem('ps5_launcher_games', JSON.stringify(games));
+        }
+
+        function saveSettings() {
+            localStorage.setItem('ps5_launcher_settings', JSON.stringify(launcherSettings));
+        }
+
+        // --- RENDU CARROUSEL ---
+        function renderCarousel() {
+            carouselEl.innerHTML = '';
+            
+            // Rendre les jeux
+            games.forEach((game, index) => {
+                const isActif = index === activeIndex;
+                const div = document.createElement('div');
+                div.className = `flex-shrink-0 w-32 h-32 md:w-40 md:h-40 rounded-2xl overflow-hidden game-icon snap-center ${isActif ? 'active' : ''}`;
+                div.onclick = () => selectItem(index);
+                div.innerHTML = `<img src="${game.icon}" alt="${game.title}" class="w-full h-full object-cover" decoding="async">`;
+                carouselEl.appendChild(div);
+            });
+
+            // Rendre l'icône Bibliothèque à la fin (Index = games.length)
+            const isLibActif = activeIndex === games.length;
+            const libDiv = document.createElement('div');
+            libDiv.className = `flex-shrink-0 w-32 h-32 md:w-40 md:h-40 rounded-2xl overflow-hidden game-icon snap-center flex items-center justify-center bg-white/10 backdrop-blur-md border border-white/20 text-white ${isLibActif ? 'active' : ''}`;
+            libDiv.onclick = () => selectItem(games.length);
+            libDiv.innerHTML = `<i class="fa-solid fa-layer-group text-5xl"></i>`;
+            carouselEl.appendChild(libDiv);
+
+            centerActiveElement();
+        }
+
+        // --- SELECTION ELEMENT CARROUSEL ---
+        function selectItem(index) {
+            if (index === activeIndex || index < 0 || index > games.length) return;
+            
+            activeIndex = index;
+            if (launcherSettings.rememberSelection) localStorage.setItem('blacklaunch_active_game', String(activeIndex));
+            
+            // Mise à jour CSS
+            const icons = carouselEl.children;
+            for (let i = 0; i < icons.length; i++) {
+                if (i === activeIndex) icons[i].classList.add('active');
+                else icons[i].classList.remove('active');
+            }
+
+            centerActiveElement();
+            updateGameInfo(activeIndex, true);
+        }
+
+        // --- MISE A JOUR INFOS ---
+        function updateGameInfo(index, animate) {
+            if (animate) {
+                infoContainer.classList.remove('animate-info');
+                void infoContainer.offsetWidth; // Reflow
+                infoContainer.classList.add('animate-info');
+            }
+            
+            if (index < games.length) {
+                // C'est un jeu
+                const game = games[index];
+                titleEl.textContent = game.title;
+                timeEl.textContent = formatPlaytime(Number(game.playtime || 0));
+                playtimeContainer.style.display = 'flex';
+                playText.textContent = "Jouer";
+                playIcon.className = "fa-solid fa-play mr-3 text-xl";
+                
+                playBtn.onclick = () => launchGameExe(game);
+                setMediaBackground(game.bg);
+            } else {
+                // C'est la bibliothèque
+                titleEl.textContent = "Bibliothèque de Jeux";
+                playtimeContainer.style.display = 'none';
+                playText.textContent = "Ouvrir";
+                playIcon.className = "fa-solid fa-folder-open mr-3 text-xl";
+                
+                playBtn.onclick = () => toggleLibrary();
+                setMediaBackground('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=1920&auto=format&fit=crop'); // Fond abstrait par défaut
+            }
+        }
+
+        function centerActiveElement() {
+            const icons = carouselEl.children;
+            if (icons.length > activeIndex) {
+                const activeIcon = icons[activeIndex];
+                const scrollPos = activeIcon.offsetLeft - (carouselEl.offsetWidth / 2) + (activeIcon.offsetWidth / 2);
+                carouselEl.scrollTo({ left: scrollPos, behavior: 'smooth' });
+            }
+        }
+
+        // --- GESTION FOND D'ECRAN (IMAGE / VIDEO) ---
+        function setMediaBackground(url) {
+            const isVideo = url.match(/\.(mp4|webm)$/i);
+            let mediaHtml = '';
+            
+            if (isVideo) {
+                mediaHtml = `<video src="${url}" autoplay loop muted playsinline class="w-full h-full object-cover"></video>`;
+            }
+            
+            const targetBg = activeBgLayer === 1 ? bg2 : bg1;
+            const currentBg = activeBgLayer === 1 ? bg1 : bg2;
+
+            if (isVideo) {
+                targetBg.style.backgroundImage = 'none';
+                targetBg.innerHTML = mediaHtml;
+            } else {
+                targetBg.innerHTML = '';
+                targetBg.style.backgroundImage = `url('${url}')`;
+            }
+
+            targetBg.style.opacity = '1';
+            currentBg.style.opacity = '0';
+            
+            activeBgLayer = activeBgLayer === 1 ? 2 : 1;
+        }
+
+        // --- LANCEMENT DU JEU ET CHRONOMETRAGE ---
+        async function launchGameExe(game) {
+            if (!window.electronAPI || !window.electronAPI.launchGame) {
+                showToast("Lancez l'application avec le fichier .exe installé.");
+                return;
+            }
+
+            if (runningSession) {
+                showToast("Un jeu est déjà en cours.");
+                return;
+            }
+
+            const result = game.platform && game.platform !== 'local'
+                ? await window.electronAPI.launchPlatform(game.platform, game.platformId || game.id)
+                : await window.electronAPI.launchGame(game.exe, game.args || '');
+            if (!result.ok) {
+                showToast(result.error || "Le jeu n'a pas pu être lancé.");
+                return;
+            }
+
+            runningSession = { gameId: game.id, startedAt: result.startedAt };
+            playText.textContent = "En cours";
+            playIcon.className = "fa-solid fa-gamepad mr-3 text-xl";
+            startLivePlaytime(game);
+            showToast(`${game.title} est lancé.`);
+        }
+
+        function setupElectronEvents() {
+            if (!window.electronAPI || !window.electronAPI.onGameEnded) return;
+
+            window.electronAPI.onGameEnded((result) => {
+                if (!runningSession) return;
+
+                const session = runningSession;
+                runningSession = null;
+                stopLivePlaytime();
+
+                if (!result.ok) {
+                    showToast(result.error || "Le jeu s'est arrêté avec une erreur.");
+                    updateGameInfo(activeIndex, false);
+                    return;
+                }
+
+                const game = games.find((item) => item.id === session.gameId);
+                if (!game) return;
+
+                const elapsedHours = Math.max(0, result.endedAt - session.startedAt) / 3600000;
+                game.playtime = Number(game.playtime || 0) + elapsedHours;
+                saveGames();
+                updateGameInfo(activeIndex, false);
+                showToast(`${game.title} fermé. Temps ajouté : ${formatPlaytime(elapsedHours)}.`);
+            });
+        }
+
+        function startLivePlaytime(game) {
+            stopLivePlaytime();
+            const refresh = () => {
+                if (!runningSession) return;
+                const elapsed = (Date.now() - runningSession.startedAt) / 3600000;
+                timeEl.textContent = formatPlaytime(Number(game.playtime || 0) + elapsed);
+            };
+            refresh();
+            playtimeTimer = setInterval(refresh, 1000);
+        }
+
+        function stopLivePlaytime() {
+            if (playtimeTimer) clearInterval(playtimeTimer);
+            playtimeTimer = null;
+        }
+
+        function formatPlaytime(hours) {
+            if (hours < 1) return `${Math.round(hours * 60)} min`;
+            return `${hours.toFixed(1)} heures`;
+        }
+
+        // --- VUE BIBLIOTHEQUE ---
+        function toggleLibrary() {
+            const carouselView = document.getElementById('carousel-view');
+            const libraryView = document.getElementById('library-view');
+            
+            if (!isLibraryOpen) {
+                // Ouvrir bibliothèque
+                renderLibraryGrid();
+                carouselView.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => {
+                    libraryView.classList.remove('hidden');
+                    // Petit délai pour la transition css
+                    setTimeout(() => libraryView.classList.remove('opacity-0'), 10);
+                }, 300); // après le fade out
+                isLibraryOpen = true;
+            } else {
+                // Fermer bibliothèque
+                libraryView.classList.add('opacity-0');
+                setTimeout(() => {
+                    libraryView.classList.add('hidden');
+                    carouselView.classList.remove('pointer-events-none');
+                    carouselView.classList.remove('opacity-0');
+                }, 500);
+                isLibraryOpen = false;
+            }
+        }
+
+        function renderLibraryGrid() {
+            const grid = document.getElementById('library-grid');
+            grid.innerHTML = '';
+            const query = document.getElementById('library-search').value.trim().toLowerCase();
+            const sort = document.getElementById('library-sort').value;
+            const visibleGames = games.filter((game) => {
+                return !query || game.title.toLowerCase().includes(query);
+            }).sort((a, b) => {
+                if (sort === 'playtime') return Number(b.playtime || 0) - Number(a.playtime || 0);
+                if (sort === 'recent') return Number(b.createdAt || 0) - Number(a.createdAt || 0);
+                return a.title.localeCompare(b.title);
+            });
+
+            visibleGames.forEach((game) => {
+                const index = games.indexOf(game);
+                const div = document.createElement('div');
+                div.className = 'group relative aspect-square rounded-xl overflow-hidden cursor-pointer shadow-lg hover:shadow-2xl transition transform hover:scale-105 hover:z-10 border border-transparent hover:border-white/50 bg-black';
+                
+                // Si on clique sur un jeu dans la bibliothèque, on retourne au carrousel sur ce jeu
+                div.onclick = () => {
+                    toggleLibrary();
+                    setTimeout(() => { selectItem(index); }, 400); // sélection après la fermeture
+                };
+
+                div.innerHTML = `
+                    <img src="${game.icon}" class="w-full h-full object-cover transition duration-300 group-hover:brightness-110" decoding="async">
+                    <div class="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-4 translate-y-full group-hover:translate-y-0 transition-transform duration-300">
+                        <p class="font-bold text-sm truncate">${game.title}</p>
+                    </div>
+                `;
+                grid.appendChild(div);
+            });
+        }
+
+        // --- NAVIGATION CLAVIER ---
+        function setupKeyboardNavigation() {
+            document.addEventListener('keydown', (e) => {
+                // Bloquer si modale ouverte
+                if (document.querySelector('.modal-open')) return;
+
+                if (!isLibraryOpen) {
+                    // Navigation Carrousel
+                    if (e.key === 'ArrowRight') {
+                        selectItem(Math.min(activeIndex + 1, games.length));
+                    } else if (e.key === 'ArrowLeft') {
+                        selectItem(Math.max(activeIndex - 1, 0));
+                    } else if (e.key === 'Enter') {
+                        playBtn.click();
+                    }
+                } else {
+                    // Dans la bibliothèque : Echap pour quitter
+                    if (e.key === 'Escape') {
+                        toggleLibrary();
+                    }
+                }
+            });
+        }
+
+        // --- GESTION DES MODALES ---
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.remove('hidden');
+            document.body.classList.add('modal-open'); 
+            
+            if (id === 'settings-modal') {
+                renderManageGamesList();
+                document.getElementById('setting-confirm-delete').checked = launcherSettings.confirmDelete;
+                document.getElementById('setting-fullscreen').checked = launcherSettings.fullscreen;
+                document.getElementById('setting-animations').checked = launcherSettings.animations;
+                document.getElementById('setting-remember-selection').checked = launcherSettings.rememberSelection;
+            }
+
+            setTimeout(() => {
+                modal.classList.remove('opacity-0');
+                modal.querySelector('.modal-content').classList.remove('scale-95');
+                modal.querySelector('.modal-content').classList.add('scale-100');
+            }, 10);
+        }
+
+        function prepareGameForm(game) {
+            editingGameId = game ? game.id : null;
+            document.getElementById('game-form-title').textContent = game ? 'Modifier le jeu' : 'Ajouter un jeu';
+            document.getElementById('game-form-submit-text').textContent = game ? 'Enregistrer les modifications' : 'Ajouter à la bibliothèque';
+            document.getElementById('new-title').value = game ? game.title : '';
+            document.getElementById('new-icon').value = game ? game.icon : '';
+            document.getElementById('new-bg').value = game ? game.bg : '';
+            document.getElementById('new-exe').value = game ? game.exe : '';
+            document.getElementById('new-platform').value = game ? (game.platform || 'local') : 'local';
+            document.getElementById('new-platform-id').value = game ? (game.platformId || '') : '';
+            document.getElementById('new-args').value = game ? (game.args || '') : '';
+            openModal('add-game-modal');
+        }
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            modal.classList.add('opacity-0');
+            modal.querySelector('.modal-content').classList.remove('scale-100');
+            modal.querySelector('.modal-content').classList.add('scale-95');
+            document.body.classList.remove('modal-open');
+            
+            setTimeout(() => { modal.classList.add('hidden'); }, 300);
+        }
+
+        // --- AJOUTER UN JEU (FORMULAIRE) ---
+        document.getElementById('choose-exe-btn').addEventListener('click', async () => {
+            if (!window.electronAPI || !window.electronAPI.chooseExecutable) {
+                showToast("Le choix de fichier est disponible dans l'application installée.");
+                return;
+            }
+
+            const executable = await window.electronAPI.chooseExecutable();
+            if (executable) document.getElementById('new-exe').value = executable;
+        });
+
+        async function chooseMediaField(fieldId, kind) {
+            if (!window.electronAPI || !window.electronAPI.importMedia) {
+                showToast("L'import de fichiers est disponible dans l'application installée.");
+                return;
+            }
+            try {
+                const media = await window.electronAPI.importMedia(kind);
+                if (media) document.getElementById(fieldId).value = media;
+            } catch (error) {
+                showToast(error.message || "Import impossible.");
+            }
+        }
+
+        document.getElementById('import-icon-btn').addEventListener('click', () => chooseMediaField('new-icon', 'icon'));
+        document.getElementById('import-bg-btn').addEventListener('click', () => chooseMediaField('new-bg', 'background'));
+
+        async function localizeMedia(value, kind) {
+            if (!/^https?:\/\//i.test(value)) return value;
+            if (!window.electronAPI || !window.electronAPI.downloadMedia) {
+                throw new Error("Le téléchargement local est disponible dans l'application installée.");
+            }
+            try {
+                return await window.electronAPI.downloadMedia(value, kind);
+            } catch (error) {
+                showToast(`Média non téléchargeable (${error.message}). URL conservée.`);
+                return value;
+            }
+        }
+
+        document.getElementById('add-game-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const submit = this.querySelector('button[type="submit"]');
+            submit.disabled = true;
+            try {
+                const title = document.getElementById('new-title').value.trim();
+                const icon = await localizeMedia(document.getElementById('new-icon').value.trim(), 'icon');
+                const bg = await localizeMedia(document.getElementById('new-bg').value.trim(), 'background');
+                const exe = document.getElementById('new-exe').value.trim();
+                const platform = document.getElementById('new-platform').value;
+                const platformId = document.getElementById('new-platform-id').value.trim();
+                const args = document.getElementById('new-args').value.trim();
+                const existing = games.find((game) => game.id === editingGameId);
+
+                if (existing) {
+                    existing.title = title;
+                    existing.icon = icon;
+                    existing.bg = bg;
+                    existing.exe = exe;
+                    existing.platform = platform;
+                    existing.platformId = platformId;
+                    existing.args = args;
+                    showToast(`${title} modifié.`);
+                } else {
+                    games.push({ id: 'g' + Date.now(), title, icon, bg, exe, platform, platformId, args, playtime: 0, createdAt: Date.now() });
+                    showToast(`${title} ajouté !`);
+                }
+
+                saveGames();
+                renderCarousel();
+                updateGameInfo(activeIndex, false);
+                closeModal('add-game-modal');
+                this.reset();
+                editingGameId = null;
+            } catch (error) {
+                showToast(error.message || "Impossible d'enregistrer ce jeu.");
+            } finally {
+                submit.disabled = false;
+            }
+        });
+
+        // --- SUPPRIMER DES JEUX (PARAMETRES) ---
+        function renderManageGamesList() {
+            const listEl = document.getElementById('manage-games-list');
+            listEl.innerHTML = '';
+            
+            if (games.length === 0) {
+                listEl.innerHTML = '<p class="text-gray-400 italic">Aucun jeu dans la bibliothèque.</p>';
+                return;
+            }
+
+            games.forEach((game) => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center bg-white/5 p-3 rounded-lg border border-white/10 hover:bg-white/10 transition';
+                div.innerHTML = `
+                    <div class="flex items-center space-x-4 overflow-hidden">
+                        <img src="${game.icon}" class="w-12 h-12 rounded object-cover shrink-0" decoding="async">
+                        <div class="flex flex-col truncate">
+                            <span class="font-bold truncate">${game.title}</span>
+                            <span class="text-xs ${game.platform && game.platform !== 'local' ? 'text-blue-300' : 'text-gray-400'} truncate">${game.platform && game.platform !== 'local' ? game.platform.toUpperCase() : (game.exe || 'Chemin non défini')}</span>
+                        </div>
+                    </div>
+                    <button onclick="editGame('${game.id}')" class="text-blue-300 hover:text-blue-100 p-3 shrink-0" title="Modifier">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button onclick="deleteGame('${game.id}')" class="text-red-400 hover:text-red-500 p-3 shrink-0" title="Supprimer">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                `;
+                listEl.appendChild(div);
+            });
+        }
+
+        window.deleteGame = function(id) {
+            const indexToRemove = games.findIndex(g => g.id === id);
+            if (indexToRemove === -1) return;
+            if (launcherSettings.confirmDelete && !window.confirm(`Supprimer « ${games[indexToRemove].title} » ?`)) return;
+
+            games.splice(indexToRemove, 1);
+            saveGames();
+            
+            if (activeIndex >= games.length) {
+                activeIndex = Math.max(0, games.length); // Sélectionne la bibliothèque si c'était le dernier jeu
+            }
+
+            renderManageGamesList();
+            renderCarousel();
+            updateGameInfo(activeIndex, true);
+            showToast("Jeu supprimé.");
+        }
+
+        window.editGame = function(id) {
+            const game = games.find((item) => item.id === id);
+            if (game) prepareGameForm(game);
+        };
+
+        document.getElementById('setting-confirm-delete').addEventListener('change', (event) => {
+            launcherSettings.confirmDelete = event.target.checked;
+            saveSettings();
+        });
+
+        document.getElementById('setting-fullscreen').addEventListener('change', (event) => {
+            launcherSettings.fullscreen = event.target.checked;
+            saveSettings();
+            if (window.electronAPI && window.electronAPI.setWindowFullscreen) {
+                window.electronAPI.setWindowFullscreen(event.target.checked);
+            }
+        });
+
+        document.getElementById('setting-animations').addEventListener('change', (event) => {
+            launcherSettings.animations = event.target.checked;
+            saveSettings();
+            document.body.classList.toggle('reduce-motion', !launcherSettings.animations);
+        });
+
+        document.getElementById('setting-remember-selection').addEventListener('change', (event) => {
+            launcherSettings.rememberSelection = event.target.checked;
+            saveSettings();
+            if (!event.target.checked) localStorage.removeItem('blacklaunch_active_game');
+        });
+
+        document.getElementById('open-data-folder-btn').addEventListener('click', () => {
+            if (window.electronAPI && window.electronAPI.openDataFolder) window.electronAPI.openDataFolder();
+        });
+
+        document.getElementById('reset-settings-btn').addEventListener('click', () => {
+            Object.assign(launcherSettings, { confirmDelete: true, fullscreen: false, animations: true, rememberSelection: true });
+            saveSettings();
+            document.getElementById('setting-confirm-delete').checked = true;
+            document.getElementById('setting-fullscreen').checked = false;
+            document.getElementById('setting-animations').checked = true;
+            document.getElementById('setting-remember-selection').checked = true;
+            if (window.electronAPI && window.electronAPI.setWindowFullscreen) window.electronAPI.setWindowFullscreen(false);
+            showToast("Options réinitialisées.");
+        });
+
+        document.getElementById('library-search').addEventListener('input', renderLibraryGrid);
+        document.getElementById('library-sort').addEventListener('change', renderLibraryGrid);
+
+        document.getElementById('backup-btn').addEventListener('click', async () => {
+            if (!window.electronAPI || !window.electronAPI.saveBackup) return;
+            const saved = await window.electronAPI.saveBackup({ version: 1, games, settings: launcherSettings });
+            if (saved) showToast("Sauvegarde exportée.");
+        });
+
+        document.getElementById('restore-btn').addEventListener('click', async () => {
+            if (!window.electronAPI || !window.electronAPI.loadBackup) return;
+            try {
+                const backup = await window.electronAPI.loadBackup();
+                if (!backup) return;
+                if (!Array.isArray(backup.games)) throw new Error("Format de sauvegarde invalide.");
+                games = backup.games;
+                if (backup.settings) Object.assign(launcherSettings, backup.settings);
+                saveGames();
+                saveSettings();
+                renderManageGamesList();
+                renderCarousel();
+                updateGameInfo(activeIndex, false);
+                showToast("Sauvegarde importée.");
+            } catch (error) {
+                showToast(error.message || "Import impossible.");
+            }
+        });
+
+        document.getElementById('check-update-btn').addEventListener('click', async () => {
+            const status = document.getElementById('update-status');
+            status.textContent = "Vérification GitHub...";
+            try {
+                const release = await window.electronAPI.checkUpdate();
+                status.innerHTML = `Dernière release : <a class="underline" href="${release.url}" target="_blank">${release.version}</a>`;
+            } catch (error) {
+                status.textContent = `Aucune release GitHub détectée : ${error.message}`;
+            }
+        });
+
+        function quitLauncher() {
+            if (window.electronAPI && window.electronAPI.quitApp) window.electronAPI.quitApp();
+        }
+
+        // --- UTILITAIRES ---
+        function updateClock() {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').textContent = message;
+            
+            toast.classList.remove('opacity-0', 'translate-y-4');
+            toast.classList.add('opacity-100', 'translate-y-0');
+            
+            if(window.toastTimer) clearTimeout(window.toastTimer);
+            window.toastTimer = setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-4');
+            }, 3000);
+        }
+
+        // Démarrage
+        window.onload = init;
+    </script>
+</body>
+</html>
